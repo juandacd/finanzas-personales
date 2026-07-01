@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import SaldosIniciales from '@/components/SaldosIniciales'
+import BolsillosConfig from '@/components/BolsillosConfig'
 import Categorias from '@/components/Categorias'
 
 export default function Configuracion() {
@@ -22,6 +23,17 @@ export default function Configuracion() {
           de cuentas debe cuadrar con el total de bolsillos.
         </p>
         <SaldosIniciales />
+      </div>
+
+      {/* Bolsillos (definición) */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Bolsillos</h2>
+        <p className="mb-4 mt-1 text-sm text-slate-500">
+          Define nombre, porcentaje de reparto, color y tipo de cada bolsillo. La
+          suma de porcentajes debe ser 100%. (Los saldos iniciales se editan
+          arriba; las metas, en su propia página.)
+        </p>
+        <BolsillosConfig />
       </div>
 
       {/* Categorías */}
