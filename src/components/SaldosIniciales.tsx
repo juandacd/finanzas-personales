@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getRows, updateRow } from '@/lib/sheets'
+import { useFinanzas } from '@/lib/FinanzasContext'
 import { formatCOP } from '@/lib/format'
 import type { BolsilloRow, CuentaRow } from '@/types/sheets'
 
@@ -18,6 +19,7 @@ function parseMonto(texto: string): number {
 }
 
 export default function SaldosIniciales() {
+  const { refrescar } = useFinanzas()
   const [cuentas, setCuentas] = useState<ConFila<CuentaRow>[]>([])
   const [bolsillos, setBolsillos] = useState<ConFila<BolsilloRow>[]>([])
   /** id → texto del input de saldo_inicial. */
@@ -92,6 +94,9 @@ export default function SaldosIniciales() {
       }
       setGuardadoOk(true)
       cargar()
+      // Propaga los cambios al store para que Inicio, Bolsillos, etc. se
+      // actualicen de inmediato sin recargar la página.
+      await refrescar()
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'No se pudieron guardar los saldos.',
