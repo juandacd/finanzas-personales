@@ -7,13 +7,14 @@ export const GOOGLE_CLIENT_ID =
   '430502472090-ftbnv8mll2imvt0fv6ggor9p86dai4uu.apps.googleusercontent.com'
 
 /**
- * Scopes solicitados.
- * - `spreadsheets` y `drive.file` son los necesarios para leer/escribir la hoja.
- * - `openid email profile` se añaden para poder mostrar el nombre y correo del
- *   usuario (perfil) sin necesidad de un backend.
+ * Scopes solicitados (todos NO sensibles, para evitar la pantalla de
+ * "app no verificada" y reducir los clics de consentimiento).
+ * - `drive.file`: acceso solo a los archivos que la app crea o abre. Es
+ *   suficiente para el API de Sheets sobre nuestro propio archivo (crear, leer
+ *   y escribir), sin necesitar el scope sensible `spreadsheets`.
+ * - `openid email profile`: para mostrar el nombre y correo del usuario.
  */
 export const GOOGLE_SCOPES = [
-  'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
   'openid',
   'email',

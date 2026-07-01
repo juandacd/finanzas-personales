@@ -40,7 +40,11 @@ const AuthContext = createContext<AuthContextValor | null>(null)
 /** Refresca el token este número de milisegundos ANTES de que expire. */
 const MARGEN_REFRESCO_MS = 60_000
 
-/** Clave en sessionStorage (sobrevive recargas de la pestaña, se limpia al cerrarla). */
+/**
+ * Clave en localStorage. Se usa localStorage (no sessionStorage) para que la
+ * sesión sobreviva al cerrar y reabrir el navegador (p. ej. Safari en iPhone)
+ * mientras el token siga vigente.
+ */
 const SS_KEY = 'mf_sesion'
 
 interface SesionGuardada {
@@ -52,7 +56,7 @@ interface SesionGuardada {
 
 function leerSesion(): SesionGuardada | null {
   try {
-    const raw = sessionStorage.getItem(SS_KEY)
+    const raw = localStorage.getItem(SS_KEY)
     if (!raw) return null
     const s = JSON.parse(raw) as SesionGuardada
     if (!s.access_token || !s.expires_at || !s.usuario) return null
@@ -64,15 +68,15 @@ function leerSesion(): SesionGuardada | null {
 
 function guardarSesion(s: SesionGuardada): void {
   try {
-    sessionStorage.setItem(SS_KEY, JSON.stringify(s))
+    localStorage.setItem(SS_KEY, JSON.stringify(s))
   } catch {
-    /* sessionStorage puede no estar disponible; no es crítico. */
+    /* localStorage puede no estar disponible; no es crítico. */
   }
 }
 
 function limpiarSesionStorage(): void {
   try {
-    sessionStorage.removeItem(SS_KEY)
+    localStorage.removeItem(SS_KEY)
   } catch {
     /* ignorar */
   }
@@ -84,7 +88,7 @@ function sesionVigente(s: SesionGuardada | null): s is SesionGuardada {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Restauración síncrona desde sessionStorage: si hay token vigente, lo
+  // Restauración síncrona desde localStorage: si hay token vigente, lo
   // establecemos en la capa de datos ANTES de que los hijos monten sus efectos.
   const [token, setToken] = useState<string | null>(() => {
     const s = leerSesion()
@@ -224,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persiste la sesión en sessionStorage ante cualquier cambio de token/usuario.
+  // Persiste la sesión en localStorage ante cualquier cambio de token/usuario.
   useEffect(() => {
     if (token && usuario && expiresAt) {
       guardarSesion({ access_token: token, expires_at: expiresAt, usuario })
