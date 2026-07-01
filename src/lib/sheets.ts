@@ -105,10 +105,10 @@ const HOJAS: Record<HojaNombre, HojaDef> = {
       s('nombre'),
       n('monto_objetivo'),
       s('fecha_objetivo'),
-      s('bolsillo_origen_id'),
-      n('aporte_sugerido'),
-      n('saldo_actual'),
+      s('bolsillo_id'),
+      s('bolsillo_origen_default_id'),
       s('estado'),
+      s('notas'),
     ],
   },
   Config: {

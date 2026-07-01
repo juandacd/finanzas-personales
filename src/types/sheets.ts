@@ -5,8 +5,13 @@
  * (number/boolean/string) por la capa de acceso a datos (`src/lib/sheets.ts`).
  */
 
-/** Tipo de bolsillo: `acumula` (ahorra) o `gasto` (se consume). */
-export type TipoBolsillo = 'acumula' | 'gasto'
+/**
+ * Tipo de bolsillo:
+ * - `acumula`: ahorra según su porcentaje del ingreso.
+ * - `gasto`: se consume (gastos del día a día).
+ * - `meta`: bolsa de una meta de ahorro; NO participa en el reparto por %.
+ */
+export type TipoBolsillo = 'acumula' | 'gasto' | 'meta'
 
 /** Tipo de movimiento financiero. */
 export type TipoMovimiento =
@@ -90,18 +95,22 @@ export interface GastoFijoRow {
   ultimo_pago: string
 }
 
+/** Estado de una meta de ahorro. */
+export type EstadoMeta = 'activa' | 'cumplida' | 'pausada'
+
 /** Hoja "Metas". */
 export interface MetaRow {
   id: string
   nombre: string
   monto_objetivo: number
-  /** Fecha objetivo (ISO 8601). */
+  /** Fecha objetivo (ISO 8601 yyyy-mm-dd), opcional. */
   fecha_objetivo: string
-  bolsillo_origen_id: string
-  aporte_sugerido: number
-  saldo_actual: number
-  /** Estado, p. ej. "activa", "cumplida", "pausada". */
-  estado: string
+  /** Bolsillo (tipo "meta") que representa la bolsa de esta meta. */
+  bolsillo_id: string
+  /** Bolsillo sugerido por defecto para aportar (opcional, p. ej. Ahorro). */
+  bolsillo_origen_default_id: string
+  estado: EstadoMeta
+  notas: string
 }
 
 /** Hoja "Config" (pares clave/valor). */

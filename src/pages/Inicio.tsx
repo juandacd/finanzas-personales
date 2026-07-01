@@ -5,9 +5,10 @@ import { formatCOP } from '@/lib/format'
 
 /** Página de inicio / dashboard mínimo. */
 export default function Inicio() {
-  const { bolsillos, saldos, total, cuadre, proximosPagos, cargando, error } =
+  const { bolsillos, saldos, total, cuadre, proximosPagos, metas, cargando, error } =
     useFinanzas()
-  const activos = bolsillos.filter((b) => b.activo)
+  const activos = bolsillos.filter((b) => b.activo && b.tipo !== 'meta')
+  const metasActivas = metas.filter((m) => !m.progreso.cumplida).slice(0, 3)
 
   // Pagos que requieren atención (vencidos, hoy o dentro de 7 días).
   const pendientes = proximosPagos.filter((p) => p.diasRestantes <= 7)
@@ -91,6 +92,49 @@ export default function Inicio() {
               </li>
             ))}
           </ul>
+
+          {/* Metas (compacto) */}
+          {metasActivas.length > 0 && (
+            <>
+              <div className="mb-2 mt-8 flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                  Metas
+                </h2>
+                <Link to="/metas" className="text-xs font-medium text-brand-600 hover:underline">
+                  Ver todas
+                </Link>
+              </div>
+              <ul className="space-y-2">
+                {metasActivas.map((mc) => {
+                  const color = mc.bolsillo?.color ?? '#6366f1'
+                  return (
+                    <li
+                      key={mc.meta.id}
+                      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="truncate font-medium text-slate-800">
+                          {mc.meta.nombre}
+                        </span>
+                        <span className="shrink-0 text-slate-500">
+                          {formatCOP(mc.progreso.actual)} / {formatCOP(mc.progreso.objetivo)}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${mc.progreso.porcentaje}%`, backgroundColor: color }}
+                        />
+                      </div>
+                      <p className="mt-1 text-right text-xs text-slate-400">
+                        {mc.progreso.porcentaje.toFixed(0)}%
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
 
           {/* Próximos pagos */}
           {proximosPagos.length > 0 && (

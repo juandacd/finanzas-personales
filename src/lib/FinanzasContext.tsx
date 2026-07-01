@@ -10,15 +10,21 @@ import {
 } from 'react'
 import { getRows } from './sheets'
 import {
+  aporteSugerido,
   calcularSaldosDesde,
   cuadreDesde,
   disponibleRealPorBolsillo,
   estadoGastoFijo,
+  estadoMeta,
+  progresoMeta,
   reservasPorBolsillo,
   sumarSaldos,
+  type AporteSugerido,
   type Cuadre,
   type EstadoGastoFijo,
+  type EstadoMetaCalc,
   type MapaSaldos,
+  type ProgresoMeta,
   type SaldosCalculados,
 } from './calculos'
 import type {
@@ -27,6 +33,7 @@ import type {
   ConfigRow,
   CuentaRow,
   GastoFijoRow,
+  MetaRow,
   MovimientoRow,
 } from '@/types/sheets'
 
@@ -35,12 +42,23 @@ export interface ProximoPago extends EstadoGastoFijo {
   gasto: GastoFijoRow
 }
 
+/** Una meta con sus campos calculados. */
+export interface MetaCalculada {
+  meta: MetaRow
+  /** Bolsillo (tipo meta) asociado, si existe. */
+  bolsillo?: BolsilloRow
+  progreso: ProgresoMeta
+  aporte: AporteSugerido
+  estado: EstadoMetaCalc
+}
+
 interface FinanzasCtx {
   bolsillos: BolsilloRow[]
   cuentas: CuentaRow[]
   categorias: CategoriaRow[]
   movimientos: MovimientoRow[]
   gastosFijos: GastoFijoRow[]
+  metas: MetaCalculada[]
   config: ConfigRow[]
   /** Saldos calculados (bolsillos y cuentas). */
   saldos: SaldosCalculados
@@ -53,6 +71,8 @@ interface FinanzasCtx {
   disponibleReal: MapaSaldos
   /** Gastos fijos activos con su estado, ordenados por fecha de próximo pago. */
   proximosPagos: ProximoPago[]
+  /** Devuelve el bolsillo asociado a una meta (o undefined). */
+  bolsilloDeMeta: (meta: MetaRow) => BolsilloRow | undefined
   cargando: boolean
   error: string | null
   /** Vuelve a leer todas las hojas (refresca el caché). */
@@ -71,6 +91,7 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
   const [categorias, setCategorias] = useState<CategoriaRow[]>([])
   const [movimientos, setMovimientos] = useState<MovimientoRow[]>([])
   const [gastosFijos, setGastosFijos] = useState<GastoFijoRow[]>([])
+  const [metasRows, setMetasRows] = useState<MetaRow[]>([])
   const [config, setConfig] = useState<ConfigRow[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,12 +102,13 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
     if (primeraCarga.current) setCargando(true)
     setError(null)
     try {
-      const [bs, cs, cats, movs, gfs, cfg] = await Promise.all([
+      const [bs, cs, cats, movs, gfs, mts, cfg] = await Promise.all([
         getRows('Bolsillos'),
         getRows('Cuentas'),
         getRows('Categorias'),
         getRows('Movimientos'),
         getRows('GastosFijos'),
+        getRows('Metas'),
         getRows('Config'),
       ])
       setBolsillos(bs)
@@ -94,6 +116,7 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
       setCategorias(cats)
       setMovimientos(movs)
       setGastosFijos(gfs)
+      setMetasRows(mts)
       setConfig(cfg)
     } catch (e) {
       setError(
@@ -132,6 +155,23 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => (a.proximoPago < b.proximoPago ? -1 : 1))
   }, [gastosFijos])
 
+  const bolsilloPorId = useMemo(() => {
+    const mapa = new Map<string, BolsilloRow>()
+    for (const b of bolsillos) mapa.set(b.id, b)
+    return mapa
+  }, [bolsillos])
+
+  const metas = useMemo<MetaCalculada[]>(() => {
+    const hoy = new Date()
+    return metasRows.map((meta) => ({
+      meta,
+      bolsillo: bolsilloPorId.get(meta.bolsillo_id),
+      progreso: progresoMeta(meta, saldos),
+      aporte: aporteSugerido(meta, saldos, hoy, config),
+      estado: estadoMeta(meta, saldos, hoy),
+    }))
+  }, [metasRows, saldos, bolsilloPorId, config])
+
   const nombrePorId = useMemo(() => {
     const mapa: Record<string, string> = {}
     for (const b of bolsillos) mapa[b.id] = b.nombre
@@ -152,6 +192,7 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
     categorias,
     movimientos,
     gastosFijos,
+    metas,
     config,
     saldos,
     cuadre,
@@ -159,6 +200,7 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
     reservas,
     disponibleReal,
     proximosPagos,
+    bolsilloDeMeta: (meta: MetaRow) => bolsilloPorId.get(meta.bolsillo_id),
     cargando,
     error,
     refrescar,

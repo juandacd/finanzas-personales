@@ -22,6 +22,11 @@ export default function RegistrarIngreso() {
     () => categoriasAll.filter((c) => c.tipo === 'ingreso'),
     [categoriasAll],
   )
+  // Los bolsillos tipo "meta" no participan en el reparto por %.
+  const bolsillosReparto = useMemo(
+    () => bolsillos.filter((b) => b.tipo !== 'meta'),
+    [bolsillos],
+  )
 
   const [monto, setMonto] = useState('')
   const [cuentaId, setCuentaId] = useState('')
@@ -49,16 +54,20 @@ export default function RegistrarIngreso() {
 
   // Recalcula el reparto automático al cambiar el monto (si no se editó a mano).
   useEffect(() => {
-    if (bolsillos.length === 0 || repartoEditado) return
-    const auto = calcularReparto(montoNum, bolsillos)
+    if (bolsillosReparto.length === 0 || repartoEditado) return
+    const auto = calcularReparto(montoNum, bolsillosReparto)
     const texto: Record<string, string> = {}
-    for (const b of bolsillos) texto[b.id] = String(auto[b.id] ?? 0)
+    for (const b of bolsillosReparto) texto[b.id] = String(auto[b.id] ?? 0)
     setReparto(texto)
-  }, [montoNum, bolsillos, repartoEditado])
+  }, [montoNum, bolsillosReparto, repartoEditado])
 
   const sumaReparto = useMemo(
-    () => bolsillos.reduce((acc, b) => acc + parseMontoInput(reparto[b.id] ?? ''), 0),
-    [bolsillos, reparto],
+    () =>
+      bolsillosReparto.reduce(
+        (acc, b) => acc + parseMontoInput(reparto[b.id] ?? ''),
+        0,
+      ),
+    [bolsillosReparto, reparto],
   )
   const diferenciaReparto = montoNum - sumaReparto
 
@@ -69,9 +78,9 @@ export default function RegistrarIngreso() {
 
   function restablecerReparto() {
     setRepartoEditado(false)
-    const auto = calcularReparto(montoNum, bolsillos)
+    const auto = calcularReparto(montoNum, bolsillosReparto)
     const texto: Record<string, string> = {}
-    for (const b of bolsillos) texto[b.id] = String(auto[b.id] ?? 0)
+    for (const b of bolsillosReparto) texto[b.id] = String(auto[b.id] ?? 0)
     setReparto(texto)
   }
 
@@ -116,7 +125,7 @@ export default function RegistrarIngreso() {
     try {
       if (modo === 'reparto') {
         const grupoId = generarId()
-        const entradas = bolsillos
+        const entradas = bolsillosReparto
           .map((b) => ({ id: b.id, monto: parseMontoInput(reparto[b.id] ?? '') }))
           .filter((e) => e.monto !== 0)
         for (const e of entradas) {
@@ -244,7 +253,7 @@ export default function RegistrarIngreso() {
             </div>
 
             <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {bolsillos.map((b) => (
+              {bolsillosReparto.map((b) => (
                 <div key={b.id} className="flex items-center gap-3 px-3 py-2.5">
                   <span
                     className="h-6 w-6 shrink-0 rounded-full"

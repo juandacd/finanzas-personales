@@ -20,6 +20,7 @@ import type {
   ConfigRow,
   CuentaRow,
   GastoFijoRow,
+  MetaRow,
   MovimientoRow,
 } from '@/types/sheets'
 
@@ -129,7 +130,8 @@ export function calcularReparto(
   monto: number,
   bolsillos: BolsilloRow[],
 ): MapaSaldos {
-  const activos = bolsillos.filter((b) => b.activo)
+  // Los bolsillos tipo "meta" no participan en el reparto por porcentaje.
+  const activos = bolsillos.filter((b) => b.activo && b.tipo !== 'meta')
   const resultado: MapaSaldos = {}
   let suma = 0
   for (const b of activos) {
@@ -834,4 +836,97 @@ export function ritmoGastoCiclo(
     proyeccionFinCiclo,
     ingresadoCiclo: ingresado,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Metas de ahorro
+// ---------------------------------------------------------------------------
+
+export interface ProgresoMeta {
+  /** Saldo actual del bolsillo de la meta. */
+  actual: number
+  /** Monto objetivo de la meta. */
+  objetivo: number
+  /** Porcentaje de avance (0–100, con tope 100 para la barra). */
+  porcentaje: number
+  /** Lo que falta para llegar al objetivo (0 si ya se cumplió). */
+  faltante: number
+  cumplida: boolean
+}
+
+/** Progreso de una meta a partir del saldo de su bolsillo. */
+export function progresoMeta(meta: MetaRow, saldos: SaldosCalculados): ProgresoMeta {
+  const actual = saldos.bolsillos[meta.bolsillo_id] ?? 0
+  const objetivo = Number(meta.monto_objetivo) || 0
+  const porcentaje =
+    objetivo > 0 ? Math.min(100, (actual / objetivo) * 100) : 0
+  const faltante = Math.max(0, objetivo - actual)
+  const cumplida = objetivo > 0 && actual >= objetivo
+  return { actual, objetivo, porcentaje, faltante, cumplida }
+}
+
+export interface AporteSugerido {
+  /** Aporte sugerido por quincena para alcanzar la meta a tiempo. */
+  aporte: number
+  /** Quincenas restantes hasta la fecha objetivo (mínimo 1), o null si no hay fecha. */
+  quincenasRestantes: number | null
+  /** Días restantes hasta la fecha objetivo, o null si no hay fecha. */
+  diasRestantes: number | null
+}
+
+/**
+ * Aporte sugerido por quincena: el faltante repartido entre las quincenas que
+ * quedan hasta la fecha objetivo (mínimo 1 quincena). Si no hay fecha objetivo,
+ * sugiere el faltante completo.
+ */
+export function aporteSugerido(
+  meta: MetaRow,
+  saldos: SaldosCalculados,
+  hoy: Date,
+  _config?: ConfigRow[],
+): AporteSugerido {
+  const { faltante } = progresoMeta(meta, saldos)
+  const fecha = meta.fecha_objetivo?.trim() ? meta.fecha_objetivo.slice(0, 10) : ''
+
+  if (!fecha) {
+    return { aporte: faltante, quincenasRestantes: null, diasRestantes: null }
+  }
+
+  const hoyStr = aISO(soloFecha(hoy))
+  const diasRestantes = diffDias(hoyStr, fecha)
+  // Una quincena = 15 días. Al menos 1 para no dividir por cero.
+  const quincenasRestantes = Math.max(1, Math.ceil(diasRestantes / 15))
+  const aporte = Math.ceil(faltante / quincenasRestantes)
+  return { aporte, quincenasRestantes, diasRestantes }
+}
+
+export type EstadoMetaCalc = 'cumplida' | 'en_camino' | 'atrasada' | 'sin_fecha'
+
+/** Días por debajo de los cuales, con faltante pendiente, se considera atrasada. */
+const DIAS_MINIMOS_RAZONABLES = 7
+
+/**
+ * Estado de una meta según su progreso y su fecha objetivo:
+ * - "cumplida": el saldo ya alcanzó el objetivo.
+ * - "sin_fecha": no tiene fecha objetivo definida.
+ * - "atrasada": la fecha ya pasó sin cumplirse, o quedan menos días de los
+ *   razonables (`DIAS_MINIMOS_RAZONABLES`) y aún falta dinero.
+ * - "en_camino": el resto de los casos.
+ */
+export function estadoMeta(
+  meta: MetaRow,
+  saldos: SaldosCalculados,
+  hoy: Date,
+): EstadoMetaCalc {
+  const { cumplida } = progresoMeta(meta, saldos)
+  if (cumplida) return 'cumplida'
+
+  const fecha = meta.fecha_objetivo?.trim() ? meta.fecha_objetivo.slice(0, 10) : ''
+  if (!fecha) return 'sin_fecha'
+
+  const hoyStr = aISO(soloFecha(hoy))
+  const diasRestantes = diffDias(hoyStr, fecha)
+  if (diasRestantes < 0) return 'atrasada'
+  if (diasRestantes < DIAS_MINIMOS_RAZONABLES) return 'atrasada'
+  return 'en_camino'
 }

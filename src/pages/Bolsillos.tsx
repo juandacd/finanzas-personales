@@ -15,7 +15,8 @@ export default function Bolsillos() {
     cargando,
     error,
   } = useFinanzas()
-  const activos = bolsillos.filter((b) => b.activo)
+  // Los bolsillos tipo "meta" se gestionan en la página Metas, no aquí.
+  const activos = bolsillos.filter((b) => b.activo && b.tipo !== 'meta')
   const ciclo = cicloQuincenal(new Date())
 
   return (

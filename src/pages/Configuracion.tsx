@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import SaldosIniciales from '@/components/SaldosIniciales'
+import Categorias from '@/components/Categorias'
 
 export default function Configuracion() {
   return (
@@ -21,6 +22,16 @@ export default function Configuracion() {
           de cuentas debe cuadrar con el total de bolsillos.
         </p>
         <SaldosIniciales />
+      </div>
+
+      {/* Categorías */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Categorías</h2>
+        <p className="mb-4 mt-1 text-sm text-slate-500">
+          Gestiona las categorías de ingreso y egreso. El bolsillo por defecto es
+          opcional.
+        </p>
+        <Categorias />
       </div>
 
       {/* Diagnóstico */}
