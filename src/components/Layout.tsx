@@ -73,7 +73,7 @@ function UsuarioBox() {
  */
 export default function Layout() {
   return (
-    <div className="min-h-full bg-slate-50 text-slate-800">
+    <div className="min-h-full overflow-x-hidden bg-slate-50 text-slate-800">
       {/* Navegación lateral (escritorio) */}
       <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-60 md:flex-col md:border-r md:border-slate-200 md:bg-white">
         <div className="flex items-center gap-2 px-6 py-5">
@@ -119,20 +119,22 @@ export default function Layout() {
 
       {/* Navegación inferior (móvil) */}
       <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-8 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
-        {navItems.map(({ to, label, icon: Icon }) => (
+        {navItems.map(({ to, corto, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
               [
-                'flex flex-col items-center gap-1 py-2 text-[10px] font-medium transition-colors',
+                'flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-2 font-medium transition-colors',
                 isActive ? 'text-brand-600' : 'text-slate-500',
               ].join(' ')
             }
           >
-            <Icon className="h-5 w-5" />
-            <span className="leading-none">{label}</span>
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="w-full truncate text-center text-[9px] leading-none">
+              {corto}
+            </span>
           </NavLink>
         ))}
       </nav>

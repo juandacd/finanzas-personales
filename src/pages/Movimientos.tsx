@@ -91,18 +91,18 @@ export default function Movimientos() {
 
   return (
     <section>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-slate-900">Movimientos</h1>
         <div className="flex gap-2">
           <Link
             to="/ingreso"
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+            className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600"
           >
             + Ingreso
           </Link>
           <Link
             to="/gasto"
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             + Gasto
           </Link>
@@ -116,11 +116,11 @@ export default function Movimientos() {
       )}
 
       {/* Filtros */}
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value as '' | TipoMovimiento)}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+          className="min-w-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
         >
           <option value="">Todos los tipos</option>
           <option value="ingreso">Ingresos</option>
@@ -132,7 +132,7 @@ export default function Movimientos() {
         <select
           value={filtroBolsillo}
           onChange={(e) => setFiltroBolsillo(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+          className="min-w-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
         >
           <option value="">Todos los bolsillos</option>
           {bolsillos.map((b) => (

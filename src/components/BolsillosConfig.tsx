@@ -186,7 +186,7 @@ export default function BolsillosConfig() {
             </div>
 
             <div className="mt-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {PALETA.map((c) => (
                   <button
                     key={c}

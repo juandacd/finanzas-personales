@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import SaldosIniciales from '@/components/SaldosIniciales'
 import BolsillosConfig from '@/components/BolsillosConfig'
+import CuentasConfig from '@/components/CuentasConfig'
 import Categorias from '@/components/Categorias'
 
 export default function Configuracion() {
@@ -34,6 +35,16 @@ export default function Configuracion() {
           arriba; las metas, en su propia página.)
         </p>
         <BolsillosConfig />
+      </div>
+
+      {/* Cuentas (definición) */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Cuentas</h2>
+        <p className="mb-4 mt-1 text-sm text-slate-500">
+          Administra tus cuentas (banco, efectivo u otro). Los saldos iniciales se
+          ajustan arriba en “Saldos iniciales”.
+        </p>
+        <CuentasConfig />
       </div>
 
       {/* Categorías */}

@@ -259,7 +259,7 @@ export default function Estadisticas() {
               </p>
               <p
                 className={[
-                  'mt-1 text-xl font-bold',
+                  'mt-1 text-base font-bold sm:text-xl',
                   tasaAhorro === null
                     ? 'text-slate-400'
                     : tasaAhorro >= 0
@@ -278,7 +278,7 @@ export default function Estadisticas() {
               Ingresos vs egresos ({porDia ? 'por día' : 'por mes'})
             </h2>
             {hayIngEg ? (
-              <div className="h-72 w-full">
+              <div className="h-64 w-full sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={datosBar} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -318,7 +318,7 @@ export default function Estadisticas() {
             </h2>
             {cats.length > 0 ? (
               <>
-                <div className="h-72 w-full">
+                <div className="h-64 w-full sm:h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -414,7 +414,7 @@ export default function Estadisticas() {
               </div>
             </div>
             {seriePatrimonio.length > 0 ? (
-              <div className="h-72 w-full">
+              <div className="h-64 w-full sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={seriePatrimonio} margin={{ top: 8, right: 12, left: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -606,7 +606,9 @@ function Kpi({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs uppercase tracking-wide text-slate-400">{titulo}</p>
-      <p className={`mt-1 text-xl font-bold ${color}`}>{formatCOP(valor)}</p>
+      <p className={`mt-1 break-words text-base font-bold sm:text-xl ${color}`}>
+        {formatCOP(valor)}
+      </p>
     </div>
   )
 }
