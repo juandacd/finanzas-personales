@@ -26,8 +26,13 @@ import { hoyLocal } from './format'
 const NOMBRE_ARCHIVO = 'Mis Finanzas - Datos'
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files'
-const LS_KEY = 'mf_spreadsheet_id'
-const MIME_SPREADSHEET = 'application/vnd.google-apps.spreadsheet'
+/** Prefijo de la clave en localStorage; el id se guarda POR USUARIO. */
+const LS_KEY_PREFIX = 'mf_spreadsheet_id'
+
+/** Clave de localStorage del spreadsheet para un usuario concreto. */
+function claveUsuario(userId: string): string {
+  return `${LS_KEY_PREFIX}:${userId}`
+}
 
 // ---------------------------------------------------------------------------
 // Definición de hojas (fuente de verdad para columnas, orden y tipos)
@@ -202,7 +207,8 @@ function filaDesdeObjeto(def: HojaDef, obj: Record<string, unknown>): string[] {
 // Cliente HTTP con Bearer token y reintento ante 401
 // ---------------------------------------------------------------------------
 
-async function apiFetch(
+/** Fetch con Bearer token y reintento ante 401, SIN lanzar en !ok. */
+async function apiFetchRaw(
   url: string,
   init: RequestInit = {},
   yaReintento = false,
@@ -224,15 +230,26 @@ async function apiFetch(
     const nuevo = await refrescarToken()
     if (nuevo) {
       accessToken = nuevo
-      return apiFetch(url, init, true)
+      return apiFetchRaw(url, init, true)
     }
   }
 
+  return res
+}
+
+/** Como apiFetchRaw pero lanza un Error claro si la respuesta no es ok. */
+async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const res = await apiFetchRaw(url, init)
   if (!res.ok) {
     const detalle = await res.text().catch(() => '')
+    if (res.status === 403 && /SCOPE|insufficient/i.test(detalle)) {
+      throw new Error(
+        'Permisos de Google insuficientes (scope). Cierra sesión y vuelve a ' +
+          'entrar para conceder el acceso a Drive.',
+      )
+    }
     throw new Error(`Google API respondió ${res.status}: ${detalle}`)
   }
-
   return res
 }
 
@@ -328,25 +345,30 @@ function datosIniciales(): Partial<Record<HojaNombre, Record<string, unknown>[]>
 // Bootstrap: encontrar o crear el archivo
 // ---------------------------------------------------------------------------
 
-async function buscarArchivoEnDrive(): Promise<string | null> {
-  const q =
-    `name='${NOMBRE_ARCHIVO}' and mimeType='${MIME_SPREADSHEET}' and trashed=false`
-  const url =
-    `${DRIVE_FILES}?q=${encodeURIComponent(q)}` +
-    `&fields=${encodeURIComponent('files(id,name)')}&spaces=drive`
-  const data = await apiJson<{ files?: { id: string }[] }>(url)
-  return data.files?.[0]?.id ?? null
-}
-
-async function existeArchivo(id: string): Promise<boolean> {
-  try {
-    const data = await apiJson<{ trashed?: boolean }>(
-      `${DRIVE_FILES}/${id}?fields=id,trashed`,
-    )
-    return !data.trashed
-  } catch {
-    return false
+/**
+ * Verifica un archivo por id con drive.files.get (permitido con drive.file para
+ * archivos creados por la app). Devuelve:
+ * - 'ok' si existe y no está en la papelera,
+ * - 'no_existe' si es 404 o está en la papelera,
+ * - lanza un Error claro ante 403 de scope u otros fallos.
+ */
+async function verificarArchivo(id: string): Promise<'ok' | 'no_existe'> {
+  const res = await apiFetchRaw(
+    `${DRIVE_FILES}/${encodeURIComponent(id)}?fields=id,trashed`,
+  )
+  if (res.status === 404) return 'no_existe'
+  if (!res.ok) {
+    const detalle = await res.text().catch(() => '')
+    if (res.status === 403 && /SCOPE|insufficient/i.test(detalle)) {
+      throw new Error(
+        'Permisos de Google insuficientes (scope). Cierra sesión y vuelve a ' +
+          'entrar para conceder el acceso a Drive.',
+      )
+    }
+    throw new Error(`No se pudo verificar la hoja (${res.status}): ${detalle}`)
   }
+  const data = (await res.json()) as { trashed?: boolean }
+  return data.trashed ? 'no_existe' : 'ok'
 }
 
 /** Escribe encabezados y datos iniciales en todas las hojas de una sola vez. */
@@ -425,42 +447,79 @@ export async function sincronizarEncabezados(): Promise<string[]> {
   return corregidas
 }
 
-/**
- * Bootstrap de la base de datos. Busca el archivo en Drive; si no existe, lo
- * crea con todas las hojas, encabezados y datos iniciales. Sincroniza los
- * encabezados (migración ligera) y guarda/devuelve el spreadsheetId.
- */
-export async function inicializarDatos(): Promise<string> {
-  if (spreadsheetId) return spreadsheetId
+/** Usuario para el que se resolvió el spreadsheet actual (sub/id de Google). */
+let usuarioActualId: string | null = null
 
-  // 1) Reutiliza el id cacheado si el archivo todavía existe; si no, búscalo en
-  //    Drive por nombre; si tampoco existe, créalo con datos iniciales.
-  const cacheado =
-    typeof localStorage !== 'undefined' ? localStorage.getItem(LS_KEY) : null
-
-  let id: string | null = null
-  if (cacheado && (await existeArchivo(cacheado))) {
-    id = cacheado
-  } else {
-    id = await buscarArchivoEnDrive()
-    if (!id) {
-      id = await crearArchivo()
-    }
-  }
-
-  spreadsheetId = id
-  mapaSheetId = null
+function guardarIdLocal(userId: string, id: string): void {
   try {
-    localStorage.setItem(LS_KEY, id)
+    localStorage.setItem(claveUsuario(userId), id)
   } catch {
     /* localStorage puede no estar disponible; no es crítico. */
   }
+}
 
-  // 2) Migración ligera: asegura que los encabezados incluyan cualquier columna
-  //    nueva (p. ej. grupo_id) sin tocar los datos existentes. Idempotente.
+/**
+ * Bootstrap de la base de datos SIN usar drive.files.list (con scope drive.file
+ * no se puede buscar por nombre). El id del spreadsheet se guarda por usuario
+ * en localStorage:
+ * 1) Si hay id guardado para el usuario, se verifica con drive.files.get; si
+ *    existe, se usa.
+ * 2) Si no hay id guardado, o el archivo ya no existe (404), se crea uno nuevo
+ *    con todas las hojas y datos iniciales, y se guarda su id.
+ *
+ * @param userId Identificador estable del usuario (sub/id de Google).
+ */
+export async function inicializarDatos(userId: string): Promise<string> {
+  if (spreadsheetId && usuarioActualId === userId) return spreadsheetId
+
+  const cacheado =
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem(claveUsuario(userId))
+      : null
+
+  let id: string | null = null
+  if (cacheado && (await verificarArchivo(cacheado)) === 'ok') {
+    id = cacheado
+  } else {
+    // No hay id válido guardado para este usuario/dispositivo: crea uno nuevo.
+    id = await crearArchivo()
+    guardarIdLocal(userId, id)
+  }
+
+  spreadsheetId = id
+  usuarioActualId = userId
+  mapaSheetId = null
+
+  // Migración ligera: asegura que los encabezados incluyan cualquier columna
+  // nueva (p. ej. grupo_id) sin tocar los datos existentes. Idempotente.
   await sincronizarEncabezados()
 
   return id
+}
+
+/**
+ * Conecta manualmente una hoja existente (creada por la app) pegando su id.
+ * Verifica el acceso con drive.files.get y lo guarda para el usuario actual,
+ * evitando crear un archivo duplicado al cambiar de dispositivo.
+ */
+export async function conectarSpreadsheetId(
+  userId: string,
+  id: string,
+): Promise<void> {
+  const limpio = id.trim()
+  if (!limpio) throw new Error('Pega un id de hoja válido.')
+  const estado = await verificarArchivo(limpio)
+  if (estado !== 'ok') {
+    throw new Error(
+      'No se encontró esa hoja o la app no tiene acceso a ella (debe haber ' +
+        'sido creada por esta app).',
+    )
+  }
+  spreadsheetId = limpio
+  usuarioActualId = userId
+  mapaSheetId = null
+  guardarIdLocal(userId, limpio)
+  await sincronizarEncabezados()
 }
 
 // ---------------------------------------------------------------------------

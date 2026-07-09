@@ -30,7 +30,7 @@ const DataContext = createContext<DataContextValor | null>(null)
  * renderiza a sus hijos.
  */
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth()
+  const { token, usuario } = useAuth()
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(
     getSpreadsheetId(),
   )
@@ -38,13 +38,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const enCurso = useRef(false)
 
+  const userId = usuario?.id ?? ''
+
   const ejecutarBootstrap = useCallback(async () => {
-    if (enCurso.current || !token) return
+    if (enCurso.current || !token || !userId) return
     enCurso.current = true
     setCargando(true)
     setError(null)
     try {
-      const id = await inicializarDatos()
+      const id = await inicializarDatos(userId)
       setSpreadsheetId(id)
     } catch (e) {
       const mensaje =
@@ -54,13 +56,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setCargando(false)
       enCurso.current = false
     }
-  }, [token])
+  }, [token, userId])
 
   useEffect(() => {
-    if (token && !spreadsheetId) {
+    if (token && userId && !spreadsheetId) {
       void ejecutarBootstrap()
     }
-  }, [token, spreadsheetId, ejecutarBootstrap])
+  }, [token, userId, spreadsheetId, ejecutarBootstrap])
 
   const valor: DataContextValor = {
     spreadsheetId,

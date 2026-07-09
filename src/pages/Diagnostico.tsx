@@ -4,11 +4,13 @@ import { useAuth } from '@/lib/AuthContext'
 import {
   appendRow,
   buscarFilaPorId,
+  conectarSpreadsheetId,
   deleteRow,
   generarId,
   obtenerResumenHojas,
   type ResumenSpreadsheet,
 } from '@/lib/sheets'
+import { useFinanzas } from '@/lib/FinanzasContext'
 import { saldoTotal, verificarCuadre, type Cuadre } from '@/lib/calculos'
 import { formatCOP, hoyLocal } from '@/lib/format'
 import type { MovimientoRow } from '@/types/sheets'
@@ -21,6 +23,7 @@ type EstadoPrueba =
 
 export default function Diagnostico() {
   const { usuario } = useAuth()
+  const { refrescar } = useFinanzas()
 
   const [resumen, setResumen] = useState<ResumenSpreadsheet | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -30,6 +33,33 @@ export default function Diagnostico() {
   const [cuadre, setCuadre] = useState<Cuadre | null>(null)
   const [total, setTotal] = useState<number | null>(null)
   const [errorSaldos, setErrorSaldos] = useState<string | null>(null)
+
+  // Conectar hoja existente por id.
+  const [idManual, setIdManual] = useState('')
+  const [conectando, setConectando] = useState(false)
+  const [conectarMsg, setConectarMsg] = useState<string | null>(null)
+  const [conectarError, setConectarError] = useState<string | null>(null)
+
+  async function conectar() {
+    if (!usuario || !idManual.trim() || conectando) return
+    setConectando(true)
+    setConectarMsg(null)
+    setConectarError(null)
+    try {
+      await conectarSpreadsheetId(usuario.id, idManual.trim())
+      await refrescar()
+      cargarResumen()
+      cargarSaldos()
+      setConectarMsg('Hoja conectada. Ahora la app usa esa hoja en este dispositivo.')
+      setIdManual('')
+    } catch (e) {
+      setConectarError(
+        e instanceof Error ? e.message : 'No se pudo conectar la hoja.',
+      )
+    } finally {
+      setConectando(false)
+    }
+  }
 
   const cargarResumen = () => {
     setCargando(true)
@@ -179,6 +209,39 @@ export default function Diagnostico() {
             </a>
           </div>
         )}
+      </Tarjeta>
+
+      {/* Conectar hoja existente por ID */}
+      <Tarjeta titulo="Conectar hoja existente por ID">
+        <p className="text-sm text-slate-500">
+          ¿Ya tienes tu hoja en otro dispositivo? Pega su ID (lo ves en la URL de
+          Google Sheets, entre <code className="rounded bg-slate-100 px-1">/d/</code>
+          y <code className="rounded bg-slate-100 px-1">/edit</code>) para usarla
+          aquí y no crear un archivo duplicado.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            type="text"
+            value={idManual}
+            onChange={(e) => setIdManual(e.target.value)}
+            placeholder="ID de la hoja"
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+          <button
+            type="button"
+            onClick={conectar}
+            disabled={!idManual.trim() || conectando}
+            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {conectando ? 'Conectando…' : 'Conectar'}
+          </button>
+        </div>
+        {conectarMsg && (
+          <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+            {conectarMsg}
+          </p>
+        )}
+        {conectarError && <div className="mt-2"><Alerta>{conectarError}</Alerta></div>}
       </Tarjeta>
 
       {/* Hojas */}
