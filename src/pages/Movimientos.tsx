@@ -29,6 +29,18 @@ const ESTILOS: Record<TipoMovimiento, EstiloTipo> = {
     signo: 0,
   },
   ajuste: { etiqueta: 'Ajuste', icono: '⚙', color: 'text-slate-500', signo: 0 },
+  prestamo_otorgado: {
+    etiqueta: 'Préstamo otorgado',
+    icono: '↗',
+    color: 'text-orange-600',
+    signo: -1,
+  },
+  prestamo_devuelto: {
+    etiqueta: 'Préstamo devuelto',
+    icono: '↙',
+    color: 'text-teal-600',
+    signo: 1,
+  },
 }
 
 export default function Movimientos() {

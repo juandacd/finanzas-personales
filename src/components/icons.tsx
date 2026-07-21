@@ -80,6 +80,17 @@ export function IconMetas(props: IconProps) {
   )
 }
 
+export function IconPrestamos(props: IconProps) {
+  return (
+    <svg {...base} {...props} aria-hidden="true">
+      <circle cx="9" cy="13" r="6" />
+      <path d="M9 10.5v5M7.8 11.8h1.7a1 1 0 0 1 0 2H7.8" />
+      <path d="M16 4h5v5" />
+      <path d="M20.5 4.5 14 11" />
+    </svg>
+  )
+}
+
 export function IconEstadisticas(props: IconProps) {
   return (
     <svg {...base} {...props} aria-hidden="true">

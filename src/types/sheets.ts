@@ -20,6 +20,8 @@ export type TipoMovimiento =
   | 'transferencia_cuenta'
   | 'transferencia_bolsillo'
   | 'ajuste'
+  | 'prestamo_otorgado'
+  | 'prestamo_devuelto'
 
 /** Tipo de categoría. */
 export type TipoCategoria = 'ingreso' | 'egreso'
@@ -66,6 +68,12 @@ export interface MovimientoRow {
   conciliado: boolean
   /** Agrupa los movimientos que nacen de un mismo ingreso repartido. */
   grupo_id: string
+  /**
+   * Marca el inicio de un ciclo de quincena: es TRUE en el/los movimientos del
+   * ingreso que el usuario registra como su pago de quincena. El ciclo se ancla
+   * a estas fechas en vez de al calendario (ver `cicloActual`).
+   */
+  es_quincena: boolean
 }
 
 /** Hoja "Categorias". */
@@ -113,6 +121,33 @@ export interface MetaRow {
   notas: string
 }
 
+/** Estado de un préstamo (dinero que me deben). */
+export type EstadoPrestamo = 'pendiente' | 'parcial' | 'pagado'
+
+/**
+ * Tipo de registro de un préstamo:
+ * - `en_app`: creado con la app; descontó saldo (hay un movimiento asociado).
+ * - `inicial`: ya me debían antes de usar la app; NO descontó saldo.
+ */
+export type TipoRegistroPrestamo = 'en_app' | 'inicial'
+
+/** Hoja "Prestamos" (dinero que me deben). */
+export interface PrestamoRow {
+  id: string
+  persona: string
+  monto: number
+  /** Fecha en que se prestó (ISO 8601 yyyy-mm-dd). */
+  fecha_prestamo: string
+  /** Fecha esperada de pago (ISO 8601 yyyy-mm-dd), opcional. */
+  fecha_esperada: string
+  monto_pagado: number
+  estado: EstadoPrestamo
+  tipo_registro: TipoRegistroPrestamo
+  /** Id del movimiento de otorgamiento (solo si tipo_registro = en_app). */
+  movimiento_id: string
+  notas: string
+}
+
 /** Hoja "Config" (pares clave/valor). */
 export interface ConfigRow {
   clave: string
@@ -130,6 +165,7 @@ export interface RowPorHoja {
   Categorias: CategoriaRow
   GastosFijos: GastoFijoRow
   Metas: MetaRow
+  Prestamos: PrestamoRow
   Config: ConfigRow
 }
 

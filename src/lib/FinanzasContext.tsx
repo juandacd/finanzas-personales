@@ -16,13 +16,17 @@ import {
   disponibleRealPorBolsillo,
   estadoGastoFijo,
   estadoMeta,
+  estadoPrestamo,
+  montoPendiente,
   progresoMeta,
   reservasPorBolsillo,
   sumarSaldos,
+  totalPorCobrar,
   type AporteSugerido,
   type Cuadre,
   type EstadoGastoFijo,
   type EstadoMetaCalc,
+  type EstadoPrestamoCalc,
   type MapaSaldos,
   type ProgresoMeta,
   type SaldosCalculados,
@@ -35,6 +39,7 @@ import type {
   GastoFijoRow,
   MetaRow,
   MovimientoRow,
+  PrestamoRow,
 } from '@/types/sheets'
 
 /** Un gasto fijo junto con su estado calculado (para la lista de próximos pagos). */
@@ -52,6 +57,14 @@ export interface MetaCalculada {
   estado: EstadoMetaCalc
 }
 
+/** Un préstamo con sus campos calculados. */
+export interface PrestamoCalculado {
+  prestamo: PrestamoRow
+  /** Monto que aún falta por cobrar. */
+  pendiente: number
+  estado: EstadoPrestamoCalc
+}
+
 interface FinanzasCtx {
   bolsillos: BolsilloRow[]
   cuentas: CuentaRow[]
@@ -59,6 +72,9 @@ interface FinanzasCtx {
   movimientos: MovimientoRow[]
   gastosFijos: GastoFijoRow[]
   metas: MetaCalculada[]
+  prestamos: PrestamoCalculado[]
+  /** Total por cobrar (suma de lo pendiente de préstamos no pagados). */
+  totalPorCobrar: number
   config: ConfigRow[]
   /** Saldos calculados (bolsillos y cuentas). */
   saldos: SaldosCalculados
@@ -92,6 +108,7 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
   const [movimientos, setMovimientos] = useState<MovimientoRow[]>([])
   const [gastosFijos, setGastosFijos] = useState<GastoFijoRow[]>([])
   const [metasRows, setMetasRows] = useState<MetaRow[]>([])
+  const [prestamosRows, setPrestamosRows] = useState<PrestamoRow[]>([])
   const [config, setConfig] = useState<ConfigRow[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -102,13 +119,14 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
     if (primeraCarga.current) setCargando(true)
     setError(null)
     try {
-      const [bs, cs, cats, movs, gfs, mts, cfg] = await Promise.all([
+      const [bs, cs, cats, movs, gfs, mts, prs, cfg] = await Promise.all([
         getRows('Bolsillos'),
         getRows('Cuentas'),
         getRows('Categorias'),
         getRows('Movimientos'),
         getRows('GastosFijos'),
         getRows('Metas'),
+        getRows('Prestamos'),
         getRows('Config'),
       ])
       setBolsillos(bs)
@@ -117,6 +135,7 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
       setMovimientos(movs)
       setGastosFijos(gfs)
       setMetasRows(mts)
+      setPrestamosRows(prs)
       setConfig(cfg)
     } catch (e) {
       setError(
@@ -140,8 +159,8 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
   const total = useMemo(() => sumarSaldos(saldos.cuentas), [saldos])
 
   const reservas = useMemo(
-    () => reservasPorBolsillo(gastosFijos, new Date()),
-    [gastosFijos],
+    () => reservasPorBolsillo(gastosFijos, new Date(), movimientos, config),
+    [gastosFijos, movimientos, config],
   )
   const disponibleReal = useMemo(
     () => disponibleRealPorBolsillo(saldos.bolsillos, reservas),
@@ -172,6 +191,20 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
     }))
   }, [metasRows, saldos, bolsilloPorId, config])
 
+  const prestamos = useMemo<PrestamoCalculado[]>(() => {
+    const hoy = new Date()
+    return prestamosRows.map((prestamo) => ({
+      prestamo,
+      pendiente: montoPendiente(prestamo),
+      estado: estadoPrestamo(prestamo, hoy),
+    }))
+  }, [prestamosRows])
+
+  const totalCobrar = useMemo(
+    () => totalPorCobrar(prestamosRows),
+    [prestamosRows],
+  )
+
   const nombrePorId = useMemo(() => {
     const mapa: Record<string, string> = {}
     for (const b of bolsillos) mapa[b.id] = b.nombre
@@ -193,6 +226,8 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
     movimientos,
     gastosFijos,
     metas,
+    prestamos,
+    totalPorCobrar: totalCobrar,
     config,
     saldos,
     cuadre,

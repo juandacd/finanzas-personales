@@ -90,6 +90,7 @@ export default function RegistrarEgreso() {
         origen: 'manual',
         conciliado: false,
         grupo_id: '',
+        es_quincena: false,
       }
       await appendRow('Movimientos', movimiento)
       await refrescar()

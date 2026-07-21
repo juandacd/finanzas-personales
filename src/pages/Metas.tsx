@@ -510,6 +510,7 @@ function AportarModal({
           origen: 'manual',
           conciliado: false,
           grupo_id: '',
+          es_quincena: false,
         })
       } else {
         // B) Ingreso nuevo que entra completo al bolsillo de la meta.
@@ -528,6 +529,7 @@ function AportarModal({
           origen: 'manual',
           conciliado: false,
           grupo_id: '',
+          es_quincena: false,
         })
       }
 
@@ -739,6 +741,7 @@ function EliminarModal({
           origen: 'manual',
           conciliado: false,
           grupo_id: '',
+          es_quincena: false,
         })
       }
       // 2) Marca el bolsillo de la meta como inactivo (conserva historial).

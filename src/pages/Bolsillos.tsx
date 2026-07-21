@@ -1,5 +1,5 @@
 import { useFinanzas } from '@/lib/FinanzasContext'
-import { cicloQuincenal, resumenCicloBolsillo } from '@/lib/calculos'
+import { cicloActual, resumenCicloBolsillo } from '@/lib/calculos'
 import { formatCOP } from '@/lib/format'
 import type { BolsilloRow } from '@/types/sheets'
 
@@ -12,12 +12,14 @@ export default function Bolsillos() {
     movimientos,
     reservas,
     disponibleReal,
+    config,
     cargando,
     error,
   } = useFinanzas()
   // Los bolsillos tipo "meta" se gestionan en la página Metas, no aquí.
   const activos = bolsillos.filter((b) => b.activo && b.tipo !== 'meta')
-  const ciclo = cicloQuincenal(new Date())
+  // Ciclo anclado al ingreso marcado como quincena (no al calendario).
+  const ciclo = cicloActual(movimientos, new Date(), config)
 
   return (
     <section>
@@ -117,7 +119,7 @@ function Velocimetro({
 }: {
   bolsillo: BolsilloRow
   movimientos: ReturnType<typeof useFinanzas>['movimientos']
-  ciclo: ReturnType<typeof cicloQuincenal>
+  ciclo: ReturnType<typeof cicloActual>
 }) {
   const { ingresado, gastado } = resumenCicloBolsillo(
     movimientos,

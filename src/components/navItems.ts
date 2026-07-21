@@ -7,6 +7,7 @@ import {
   IconGastosFijos,
   IconEstadisticas,
   IconMetas,
+  IconPrestamos,
   IconConfiguracion,
 } from './icons'
 
@@ -30,5 +31,6 @@ export const navItems: NavItem[] = [
   { to: '/fijos', label: 'Gastos fijos', corto: 'Fijos', icon: IconGastosFijos },
   { to: '/estadisticas', label: 'Estadísticas', corto: 'Stats', icon: IconEstadisticas },
   { to: '/metas', label: 'Metas', corto: 'Metas', icon: IconMetas },
+  { to: '/prestamos', label: 'Préstamos', corto: 'Prést.', icon: IconPrestamos },
   { to: '/configuracion', label: 'Configuración', corto: 'Ajustes', icon: IconConfiguracion },
 ]

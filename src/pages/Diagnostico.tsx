@@ -111,6 +111,7 @@ export default function Diagnostico() {
         origen: 'diagnostico',
         conciliado: false,
         grupo_id: '',
+        es_quincena: false,
       }
       await appendRow('Movimientos', fila)
 

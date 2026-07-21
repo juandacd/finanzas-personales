@@ -82,7 +82,8 @@ function rangoDe(
 }
 
 export default function Estadisticas() {
-  const { movimientos, categorias, bolsillos, cuentas, cargando } = useFinanzas()
+  const { movimientos, categorias, bolsillos, cuentas, config, cargando } =
+    useFinanzas()
 
   const [tipo, setTipo] = useState<PeriodoTipo>('mes')
   const [patrimonioModo, setPatrimonioModo] = useState<'periodo' | 'todo'>('todo')
@@ -172,8 +173,8 @@ export default function Estadisticas() {
 
   // Sección 6 — Ritmo de gasto del ciclo (bolsillo de tipo gasto).
   const ritmo = useMemo(
-    () => ritmoGastoCiclo(movimientos, bolsillos, new Date()),
-    [movimientos, bolsillos],
+    () => ritmoGastoCiclo(movimientos, bolsillos, new Date(), config),
+    [movimientos, bolsillos, config],
   )
   const ritmoDia =
     ritmo.diasTranscurridos > 0

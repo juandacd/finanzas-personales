@@ -22,6 +22,7 @@ import type {
   GastoFijoRow,
   MetaRow,
   MovimientoRow,
+  PrestamoRow,
 } from '@/types/sheets'
 
 /** Mapa id → saldo. */
@@ -66,6 +67,16 @@ function aplicarMovimiento(
       break
     case 'ajuste':
       // El signo del monto define si suma o resta.
+      aplicar(bolsillos, m.bolsillo_id, monto)
+      aplicar(cuentas, m.cuenta_id, monto)
+      break
+    case 'prestamo_otorgado':
+      // Sale plata (queda como préstamo por cobrar): resta bolsillo y cuenta.
+      aplicar(bolsillos, m.bolsillo_id, -monto)
+      aplicar(cuentas, m.cuenta_id, -monto)
+      break
+    case 'prestamo_devuelto':
+      // Regresa la plata prestada: suma bolsillo y cuenta.
       aplicar(bolsillos, m.bolsillo_id, monto)
       aplicar(cuentas, m.cuenta_id, monto)
       break
@@ -200,8 +211,11 @@ export async function verificarCuadre(): Promise<Cuadre> {
 }
 
 // ---------------------------------------------------------------------------
-// Ciclo (quincena calendario)
+// Ciclo de quincena
 // ---------------------------------------------------------------------------
+// `cicloQuincenal` es la quincena de calendario (1–15 / 16–fin de mes) y se usa
+// solo como respaldo. `cicloActual` es el ciclo real: se ancla al ingreso que el
+// usuario marca como su pago de quincena (movimientos con `es_quincena = TRUE`).
 
 export interface Ciclo {
   /** Fecha de inicio (yyyy-mm-dd, inclusive). */
@@ -242,6 +256,66 @@ export function cicloQuincenal(hoy: Date): Ciclo {
     fin: ymd(anio, mes, diaFin),
     etiqueta: `${diaInicio}–${diaFin} ${MESES[mes]}`,
   }
+}
+
+/** Lee `dias_ciclo` de Config (duración del ciclo por defecto); 15 si no existe. */
+function leerDiasCiclo(config?: ConfigRow[]): number {
+  const raw = config?.find((c) => c.clave === 'dias_ciclo')?.valor
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : 15
+}
+
+/** Etiqueta legible de un rango [inicio, fin] (ISO), p. ej. "16–31 jul". */
+function etiquetaRango(inicio: string, fin: string): string {
+  const a = desdeISO(inicio)
+  const b = desdeISO(fin)
+  const mismoMes =
+    a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
+  return mismoMes
+    ? `${a.getDate()}–${b.getDate()} ${MESES[a.getMonth()]}`
+    : `${a.getDate()} ${MESES[a.getMonth()]} – ${b.getDate()} ${MESES[b.getMonth()]}`
+}
+
+/**
+ * Ciclo de quincena anclado al ingreso que el usuario marca como su pago de
+ * quincena (movimientos con `es_quincena = TRUE`), en vez del calendario:
+ *
+ * - `inicio`: la fecha del movimiento `es_quincena` más reciente que no supere
+ *   `hoy` (si el ingreso se repartió, todas sus filas comparten fecha).
+ * - `fin`: el día anterior a la SIGUIENTE fecha marcada; si no hay una posterior,
+ *   `inicio` + `dias_ciclo` días (Config `dias_ciclo`, por defecto 15).
+ * - Si no existe ningún movimiento `es_quincena`, cae en la quincena calendario
+ *   (`cicloQuincenal`) para no romper el comportamiento previo.
+ */
+export function cicloActual(
+  movimientos: MovimientoRow[],
+  hoy: Date,
+  config?: ConfigRow[],
+): Ciclo {
+  const hoyStr = aISO(soloFecha(hoy))
+
+  // Fechas distintas marcadas como inicio de ciclo, ordenadas ascendente.
+  const fechasQuincena = [
+    ...new Set(
+      movimientos
+        .filter((m) => m.es_quincena)
+        .map((m) => (m.fecha || '').slice(0, 10))
+        .filter(Boolean),
+    ),
+  ].sort()
+
+  // inicio = la fecha marcada más reciente que no supere hoy.
+  const inicio = [...fechasQuincena].reverse().find((f) => f <= hoyStr)
+
+  // Respaldo: sin ninguna marca aún, usa la quincena calendario.
+  if (!inicio) return cicloQuincenal(hoy)
+
+  const siguiente = fechasQuincena.find((f) => f > inicio)
+  const fin = siguiente
+    ? aISO(sumarDias(desdeISO(siguiente), -1))
+    : aISO(sumarDias(desdeISO(inicio), leerDiasCiclo(config)))
+
+  return { inicio, fin, etiqueta: etiquetaRango(inicio, fin) }
 }
 
 /** Resumen de un bolsillo dentro de un rango de fechas [inicio, fin]. */
@@ -291,6 +365,11 @@ function fechaAcotada(anio: number, mesIndice0: number, dia: number): Date {
 /** Fecha sin componente horario (medianoche local). */
 function soloFecha(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+/** Devuelve una nueva fecha desplazada `n` días (n puede ser negativo). */
+function sumarDias(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 }
 
 /** Fecha → "yyyy-mm-dd". */
@@ -406,26 +485,19 @@ export function estadoGastoFijo(
   return { proximoPago, diasRestantes, estado }
 }
 
-export interface OpcionesReserva {
-  /**
-   * Si se define (yyyy-mm-dd), solo se reservan los gastos cuyo próximo pago
-   * caiga en o antes de esa fecha. Por defecto NO hay límite: se reserva
-   * siempre el próximo pago de cada gasto fijo activo.
-   */
-  horizonte?: string
-}
-
 /**
  * Calcula el monto reservado por bolsillo para cubrir gastos fijos.
  *
- * REGLA DE RESERVA (por defecto, sin límite de fecha):
- * Para cada gasto fijo ACTIVO se reserva su `monto` en su `bolsillo_id`, usando
- * su `proximo_pago` vigente (el siguiente que se debe pagar). Como `proximo_pago`
- * ya apunta al siguiente pago pendiente (se avanza al registrar cada pago), se
- * reserva exactamente UNA ocurrencia por gasto — nunca dos.
+ * REGLA DE RESERVA (anclada al ciclo de quincena actual):
+ * Solo se reserva un gasto fijo ACTIVO si su `proximo_pago` cae en o antes del
+ * FIN del ciclo actual (`cicloActual`). Es decir:
+ * - Vencido o dentro del ciclo y aún no pagado (`proximo_pago` <= fin): se reserva.
+ * - Pago cuyo `proximo_pago` es posterior al fin del ciclo: NO se reserva todavía;
+ *   se cubrirá con el ingreso de la próxima quincena.
  *
- * Se puede pasar `opciones.horizonte` (yyyy-mm-dd) para volver a limitar la
- * reserva a los pagos hasta cierta fecha; por defecto no se aplica límite.
+ * Como `proximo_pago` ya apunta al siguiente pago pendiente (se avanza al
+ * registrar cada pago), un gasto ya pagado de este ciclo apunta al mes siguiente
+ * y por tanto queda fuera del horizonte: no se reserva dos veces.
  *
  * Las reservas son solo una VISTA (presupuesto): NO son movimientos, no alteran
  * los saldos reales ni el cuadre.
@@ -433,8 +505,13 @@ export interface OpcionesReserva {
 export function reservasPorBolsillo(
   gastosFijos: GastoFijoRow[],
   hoy: Date,
-  opciones: OpcionesReserva = {},
+  movimientos: MovimientoRow[],
+  config?: ConfigRow[],
 ): MapaSaldos {
+  // Horizonte de reserva: fin del ciclo actual. (Ajusta esta línea para ampliar
+  // o acortar cuánto por adelantado se reservan los pagos fijos.)
+  const horizonte = cicloActual(movimientos, hoy, config).fin
+
   const reservas: MapaSaldos = {}
   for (const gf of gastosFijos) {
     if (!gf.activo) continue
@@ -443,8 +520,8 @@ export function reservasPorBolsillo(
       ? gf.proximo_pago.slice(0, 10)
       : calcularProximoPago(gf.frecuencia, Number(gf.dia) || 1, hoy)
 
-    // Límite opcional: si se define un horizonte, ignora pagos posteriores.
-    if (opciones.horizonte && proximoPago > opciones.horizonte) continue
+    // Solo reserva pagos que caen en o antes del fin del ciclo actual.
+    if (proximoPago > horizonte) continue
 
     const id = gf.bolsillo_id
     if (!id) continue
@@ -714,6 +791,10 @@ function deltaTotalCuentas(m: MovimientoRow): number {
       return m.cuenta_id ? -monto : 0
     case 'ajuste':
       return m.cuenta_id ? monto : 0
+    case 'prestamo_otorgado':
+      return m.cuenta_id ? -monto : 0
+    case 'prestamo_devuelto':
+      return m.cuenta_id ? monto : 0
     // Las transferencias entre cuentas no cambian el total; las de bolsillo tampoco.
     default:
       return 0
@@ -760,6 +841,10 @@ function deltaBolsillo(m: MovimientoRow, id: string): number {
       return 0
     case 'ajuste':
       return m.bolsillo_id === id ? monto : 0
+    case 'prestamo_otorgado':
+      return m.bolsillo_id === id ? -monto : 0
+    case 'prestamo_devuelto':
+      return m.bolsillo_id === id ? monto : 0
     default:
       return 0
   }
@@ -792,17 +877,18 @@ export interface RitmoGasto {
 }
 
 /**
- * Ritmo de gasto del bolsillo de tipo "gasto" en la quincena actual.
- * `_config` queda reservado para futuros ciclos configurables; hoy se usa la
- * quincena calendario (cicloQuincenal).
+ * Ritmo de gasto del bolsillo de tipo "gasto" en el ciclo de quincena actual.
+ * El ciclo se ancla al ingreso marcado como quincena (`cicloActual`), por lo que
+ * el pago de quincena registrado hoy cuenta dentro de este ciclo. Suma ingresos
+ * y gastos desde el inicio del ciclo hasta hoy (sin pasar del fin del ciclo).
  */
 export function ritmoGastoCiclo(
   movimientos: MovimientoRow[],
   bolsillos: BolsilloRow[],
   hoy: Date,
-  _config?: ConfigRow[],
+  config?: ConfigRow[],
 ): RitmoGasto {
-  const ciclo = cicloQuincenal(hoy)
+  const ciclo = cicloActual(movimientos, hoy, config)
   const gasto = bolsillos.find((b) => b.tipo === 'gasto')
   const diasTotales = diffDias(ciclo.inicio, ciclo.fin) + 1
   if (!gasto) {
@@ -814,13 +900,15 @@ export function ritmoGastoCiclo(
       ingresadoCiclo: 0,
     }
   }
+  const hoyStr = aISO(soloFecha(hoy))
+  // Cuenta desde el inicio del ciclo hasta hoy, sin pasar del fin del ciclo.
+  const hasta = hoyStr < ciclo.fin ? hoyStr : ciclo.fin
   const { ingresado, gastado } = resumenCicloBolsillo(
     movimientos,
     gasto.id,
     ciclo.inicio,
-    ciclo.fin,
+    hasta,
   )
-  const hoyStr = aISO(soloFecha(hoy))
   const diasTranscurridos = Math.min(
     Math.max(diffDias(ciclo.inicio, hoyStr) + 1, 1),
     diasTotales,
@@ -929,4 +1017,53 @@ export function estadoMeta(
   if (diasRestantes < 0) return 'atrasada'
   if (diasRestantes < DIAS_MINIMOS_RAZONABLES) return 'atrasada'
   return 'en_camino'
+}
+
+// ---------------------------------------------------------------------------
+// Préstamos (dinero que me deben)
+// ---------------------------------------------------------------------------
+
+export type EstadoPrestamoCalc = 'pagado' | 'vencido' | 'parcial' | 'pendiente'
+
+/** Monto que aún falta por cobrar de un préstamo. */
+export function montoPendiente(prestamo: PrestamoRow): number {
+  const monto = Number(prestamo.monto) || 0
+  const pagado = Number(prestamo.monto_pagado) || 0
+  return Math.max(0, monto - pagado)
+}
+
+/**
+ * Estado calculado de un préstamo:
+ * - "pagado": monto_pagado >= monto.
+ * - "vencido": la fecha esperada ya pasó y no está pagado.
+ * - "parcial": se ha pagado algo (0 < monto_pagado < monto).
+ * - "pendiente": el resto de los casos.
+ */
+export function estadoPrestamo(
+  prestamo: PrestamoRow,
+  hoy: Date,
+): EstadoPrestamoCalc {
+  const monto = Number(prestamo.monto) || 0
+  const pagado = Number(prestamo.monto_pagado) || 0
+  if (pagado >= monto && monto > 0) return 'pagado'
+
+  const fecha = prestamo.fecha_esperada?.trim()
+    ? prestamo.fecha_esperada.slice(0, 10)
+    : ''
+  if (fecha) {
+    const hoyStr = aISO(soloFecha(hoy))
+    if (fecha < hoyStr) return 'vencido'
+  }
+
+  if (pagado > 0 && pagado < monto) return 'parcial'
+  return 'pendiente'
+}
+
+/** Total por cobrar: suma de lo pendiente de los préstamos no pagados. */
+export function totalPorCobrar(prestamos: PrestamoRow[]): number {
+  return prestamos.reduce((acc, p) => {
+    const monto = Number(p.monto) || 0
+    const pagado = Number(p.monto_pagado) || 0
+    return pagado >= monto && monto > 0 ? acc : acc + montoPendiente(p)
+  }, 0)
 }

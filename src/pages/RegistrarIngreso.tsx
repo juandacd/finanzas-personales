@@ -34,6 +34,8 @@ export default function RegistrarIngreso() {
   const [categoriaId, setCategoriaId] = useState('')
   const [descripcion, setDescripcion] = useState('')
 
+  const [esQuincena, setEsQuincena] = useState(false)
+
   const [modo, setModo] = useState<Modo>('reparto')
   const [reparto, setReparto] = useState<Record<string, string>>({})
   const [repartoEditado, setRepartoEditado] = useState(false)
@@ -115,6 +117,7 @@ export default function RegistrarIngreso() {
       origen: 'manual',
       conciliado: false,
       grupo_id: grupoId,
+      es_quincena: esQuincena,
     }
   }
 
@@ -227,6 +230,24 @@ export default function RegistrarIngreso() {
             className="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </Campo>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <input
+            type="checkbox"
+            checked={esQuincena}
+            onChange={(e) => setEsQuincena(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-slate-800">
+              Este es mi pago de quincena (inicia un nuevo ciclo)
+            </span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              Marca esto cuando registres tu sueldo/quincena, para que la app
+              cuente el ciclo desde hoy.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -85,6 +85,7 @@ const HOJAS: Record<HojaNombre, HojaDef> = {
       s('origen'),
       b('conciliado'),
       s('grupo_id'),
+      b('es_quincena'),
     ],
   },
   Categorias: {
@@ -113,6 +114,20 @@ const HOJAS: Record<HojaNombre, HojaDef> = {
       s('bolsillo_id'),
       s('bolsillo_origen_default_id'),
       s('estado'),
+      s('notas'),
+    ],
+  },
+  Prestamos: {
+    columnas: [
+      s('id'),
+      s('persona'),
+      n('monto'),
+      s('fecha_prestamo'),
+      s('fecha_esperada'),
+      n('monto_pagado'),
+      s('estado'),
+      s('tipo_registro'),
+      s('movimiento_id'),
       s('notas'),
     ],
   },
@@ -328,6 +343,7 @@ function configInicial(): ConfigRow[] {
     { clave: 'moneda', valor: 'COP' },
     { clave: 'ciclo', valor: 'quincenal' },
     { clave: 'fecha_inicio_ciclo', valor: hoy },
+    { clave: 'dias_ciclo', valor: '15' },
   ]
 }
 

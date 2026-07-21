@@ -3,6 +3,7 @@ import SaldosIniciales from '@/components/SaldosIniciales'
 import BolsillosConfig from '@/components/BolsillosConfig'
 import CuentasConfig from '@/components/CuentasConfig'
 import Categorias from '@/components/Categorias'
+import PrestamosIniciales from '@/components/PrestamosIniciales'
 
 export default function Configuracion() {
   return (
@@ -55,6 +56,16 @@ export default function Configuracion() {
           opcional.
         </p>
         <Categorias />
+      </div>
+
+      {/* Préstamos iniciales */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Préstamos iniciales</h2>
+        <p className="mb-4 mt-1 text-sm text-slate-500">
+          Dinero que ya te debían antes de empezar a usar la app (no descuenta
+          saldo). Se gestionan luego en la página Préstamos.
+        </p>
+        <PrestamosIniciales />
       </div>
 
       {/* Diagnóstico */}

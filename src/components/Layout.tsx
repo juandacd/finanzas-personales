@@ -117,8 +117,8 @@ export default function Layout() {
         </main>
       </div>
 
-      {/* Navegación inferior (móvil) */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-8 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
+      {/* Navegación inferior (móvil): scroll horizontal para que quepan todos. */}
+      <nav className="fixed inset-x-0 bottom-0 z-10 flex overflow-x-auto border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
         {navItems.map(({ to, corto, icon: Icon }) => (
           <NavLink
             key={to}
@@ -126,15 +126,13 @@ export default function Layout() {
             end={to === '/'}
             className={({ isActive }) =>
               [
-                'flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-2 font-medium transition-colors',
+                'flex shrink-0 basis-[19%] flex-col items-center gap-0.5 px-1 py-2 font-medium transition-colors',
                 isActive ? 'text-brand-600' : 'text-slate-500',
               ].join(' ')
             }
           >
             <Icon className="h-5 w-5 shrink-0" />
-            <span className="w-full truncate text-center text-[9px] leading-none">
-              {corto}
-            </span>
+            <span className="text-center text-[10px] leading-none">{corto}</span>
           </NavLink>
         ))}
       </nav>

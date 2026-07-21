@@ -337,6 +337,7 @@ function ModalEliminar({
           origen: 'manual',
           conciliado: false,
           grupo_id: '',
+          es_quincena: false,
         })
       }
       if (borradoFisico) {

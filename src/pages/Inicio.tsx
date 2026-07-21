@@ -5,10 +5,23 @@ import { formatCOP } from '@/lib/format'
 
 /** Página de inicio / dashboard mínimo. */
 export default function Inicio() {
-  const { bolsillos, saldos, total, cuadre, proximosPagos, metas, cargando, error } =
-    useFinanzas()
+  const {
+    bolsillos,
+    saldos,
+    total,
+    cuadre,
+    proximosPagos,
+    metas,
+    prestamos,
+    totalPorCobrar,
+    cargando,
+    error,
+  } = useFinanzas()
   const activos = bolsillos.filter((b) => b.activo && b.tipo !== 'meta')
   const metasActivas = metas.filter((m) => !m.progreso.cumplida).slice(0, 3)
+
+  const prestamosPendientes = prestamos.filter((p) => p.estado !== 'pagado')
+  const prestamosTop = prestamosPendientes.slice(0, 3)
 
   // Pagos que requieren atención (vencidos, hoy o dentro de 7 días).
   const pendientes = proximosPagos.filter((p) => p.diasRestantes <= 7)
@@ -44,7 +57,66 @@ export default function Inicio() {
                 ? '✓ Cuadrado'
                 : `Descuadre: ${formatCOP(Math.abs(cuadre.diferencia))}`}
             </p>
+            {totalPorCobrar > 0 && (
+              <p className="mt-2 border-t border-white/20 pt-2 text-xs text-brand-50">
+                Patrimonio + por cobrar ={' '}
+                <strong>{formatCOP(total + totalPorCobrar)}</strong>{' '}
+                <span className="opacity-80">(dato informativo)</span>
+              </p>
+            )}
           </div>
+
+          {/* Te deben (préstamos por cobrar) — NO forma parte del saldo real */}
+          {prestamosPendientes.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Te deben
+                  </p>
+                  <p className="mt-0.5 text-2xl font-bold text-slate-900">
+                    {formatCOP(totalPorCobrar)}
+                  </p>
+                  <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                    No incluido en tu saldo
+                  </span>
+                </div>
+                <Link
+                  to="/prestamos"
+                  className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
+                >
+                  Ver todos
+                </Link>
+              </div>
+
+              <ul className="mt-3 space-y-2">
+                {prestamosTop.map(({ prestamo, pendiente, estado }) => {
+                  const vencido = estado === 'vencido'
+                  return (
+                    <li
+                      key={prestamo.id}
+                      className={[
+                        'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+                        vencido ? 'border-red-300 bg-red-50' : 'border-slate-100',
+                      ].join(' ')}
+                    >
+                      <span className="min-w-0 truncate font-medium text-slate-800">
+                        {prestamo.persona}
+                        {vencido && (
+                          <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            Vencido
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 font-semibold text-slate-900">
+                        {formatCOP(pendiente)}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
 
           {/* Indicador global de pagos próximos (≤ 7 días o vencidos) */}
           {pendientes.length > 0 && (

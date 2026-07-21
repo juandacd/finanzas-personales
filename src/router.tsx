@@ -23,6 +23,7 @@ function CargandoPagina() {
   )
 }
 import Metas from './pages/Metas'
+import Prestamos from './pages/Prestamos'
 import Configuracion from './pages/Configuracion'
 import Diagnostico from './pages/Diagnostico'
 import NoEncontrado from './pages/NoEncontrado'
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'metas', element: <Metas /> },
+      { path: 'prestamos', element: <Prestamos /> },
       { path: 'configuracion', element: <Configuracion /> },
       { path: 'diagnostico', element: <Diagnostico /> },
       { path: '*', element: <NoEncontrado /> },
