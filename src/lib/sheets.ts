@@ -387,22 +387,31 @@ async function verificarArchivo(id: string): Promise<'ok' | 'no_existe'> {
   return data.trashed ? 'no_existe' : 'ok'
 }
 
-/** Escribe encabezados y datos iniciales en todas las hojas de una sola vez. */
-async function escribirDatosIniciales(id: string): Promise<void> {
+/**
+ * Construye los rangos (encabezados + datos iniciales) para las hojas indicadas,
+ * listos para un `values:batchUpdate`.
+ */
+function rangosEncabezadosYDatos(
+  hojas: HojaNombre[],
+): { range: string; values: string[][] }[] {
   const iniciales = datosIniciales()
-  const data = ORDEN_HOJAS.map((hoja) => {
+  return hojas.map((hoja) => {
     const def = HOJAS[hoja]
     const encabezados = def.columnas.map((c) => c.key)
-    const filas = (iniciales[hoja] ?? []).map((obj) =>
-      filaDesdeObjeto(def, obj),
-    )
+    const filas = (iniciales[hoja] ?? []).map((obj) => filaDesdeObjeto(def, obj))
     return { range: `${hoja}!A1`, values: [encabezados, ...filas] }
   })
+}
 
-  await apiFetch(
-    `${SHEETS_BASE}/${id}/values:batchUpdate`,
-    { method: 'POST', ...jsonBody({ valueInputOption: 'RAW', data }) },
-  )
+/** Escribe encabezados y datos iniciales en todas las hojas de una sola vez. */
+async function escribirDatosIniciales(id: string): Promise<void> {
+  await apiFetch(`${SHEETS_BASE}/${id}/values:batchUpdate`, {
+    method: 'POST',
+    ...jsonBody({
+      valueInputOption: 'RAW',
+      data: rangosEncabezadosYDatos(ORDEN_HOJAS),
+    }),
+  })
 }
 
 async function crearArchivo(): Promise<string> {
@@ -419,29 +428,70 @@ async function crearArchivo(): Promise<string> {
 }
 
 /**
- * Sincroniza (migración ligera) la fila de encabezados de cada hoja para que
- * coincida exactamente con las columnas definidas en HOJAS. Solo reescribe la
- * fila 1 de las hojas cuyo encabezado difiere; no toca los datos existentes.
- * Es idempotente: si todo está correcto, no realiza ninguna escritura.
+ * Migración ligera del archivo existente. Es idempotente:
  *
- * @returns Los nombres de las hojas cuyo encabezado fue corregido.
+ * 1) Consulta las pestañas reales del spreadsheet (spreadsheets.get).
+ * 2) CREA (addSheet) las hojas definidas en HOJAS que aún no existan y les
+ *    escribe su fila de encabezados y sus datos iniciales. Nunca lee el rango de
+ *    una pestaña inexistente: primero la crea.
+ * 3) Solo entonces sincroniza los encabezados de las pestañas que sí existían:
+ *    reescribe la fila 1 de aquellas cuyo encabezado difiera (sin tocar datos).
+ *
+ * @returns Los nombres de las hojas creadas o cuyo encabezado fue corregido.
  */
 export async function sincronizarEncabezados(): Promise<string[]> {
   const id = requerirSpreadsheetId()
 
-  // Lee la fila 1 de todas las hojas de una sola vez.
-  const query = ORDEN_HOJAS.map(
-    (h) => `ranges=${encodeURIComponent(`${h}!1:1`)}`,
-  ).join('&')
+  // 1) Pestañas que realmente existen en el archivo.
+  const meta = await apiJson<{
+    sheets?: { properties?: { title?: string } }[]
+  }>(`${SHEETS_BASE}/${id}?fields=${encodeURIComponent('sheets.properties(title)')}`)
+  const existentes = new Set(
+    (meta.sheets ?? [])
+      .map((s) => s.properties?.title)
+      .filter((t): t is string => Boolean(t)),
+  )
+
+  const cambiadas: string[] = []
+
+  // 2) Crea las hojas definidas que falten, con encabezados y datos iniciales.
+  const faltantes = ORDEN_HOJAS.filter((h) => !existentes.has(h))
+  if (faltantes.length > 0) {
+    await apiFetch(`${SHEETS_BASE}/${id}:batchUpdate`, {
+      method: 'POST',
+      ...jsonBody({
+        requests: faltantes.map((title) => ({
+          addSheet: { properties: { title } },
+        })),
+      }),
+    })
+    mapaSheetId = null // los gid cambiaron; invalida el caché
+
+    await apiFetch(`${SHEETS_BASE}/${id}/values:batchUpdate`, {
+      method: 'POST',
+      ...jsonBody({
+        valueInputOption: 'RAW',
+        data: rangosEncabezadosYDatos(faltantes),
+      }),
+    })
+    cambiadas.push(...faltantes)
+  }
+
+  // 3) Sincroniza encabezados SOLO de las pestañas que ya existían (las recién
+  //    creadas ya tienen los encabezados correctos). Lee su fila 1 de una vez.
+  const aRevisar = ORDEN_HOJAS.filter((h) => existentes.has(h))
+  if (aRevisar.length === 0) return cambiadas
+
+  const query = aRevisar
+    .map((h) => `ranges=${encodeURIComponent(`${h}!1:1`)}`)
+    .join('&')
   const vg = await apiJson<{ valueRanges?: { values?: string[][] }[] }>(
     `${SHEETS_BASE}/${id}/values:batchGet?${query}`,
   )
   const valueRanges = vg.valueRanges ?? []
 
   const data: { range: string; values: string[][] }[] = []
-  const corregidas: string[] = []
-
-  ORDEN_HOJAS.forEach((hoja, i) => {
+  aRevisar.forEach((hoja, i) => {
     const esperado = HOJAS[hoja].columnas.map((c) => c.key)
     const actual = valueRanges[i]?.values?.[0] ?? []
     const coincide =
@@ -449,7 +499,7 @@ export async function sincronizarEncabezados(): Promise<string[]> {
       esperado.every((clave, j) => actual[j] === clave)
     if (!coincide) {
       data.push({ range: `${hoja}!A1`, values: [esperado] })
-      corregidas.push(hoja)
+      cambiadas.push(hoja)
     }
   })
 
@@ -460,7 +510,7 @@ export async function sincronizarEncabezados(): Promise<string[]> {
     })
   }
 
-  return corregidas
+  return cambiadas
 }
 
 /** Usuario para el que se resolvió el spreadsheet actual (sub/id de Google). */
