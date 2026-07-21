@@ -173,8 +173,8 @@ export default function Estadisticas() {
 
   // Sección 6 — Ritmo de gasto del ciclo (bolsillo de tipo gasto).
   const ritmo = useMemo(
-    () => ritmoGastoCiclo(movimientos, bolsillos, new Date(), config),
-    [movimientos, bolsillos, config],
+    () => ritmoGastoCiclo(movimientos, bolsillos, new Date(), categorias, config),
+    [movimientos, bolsillos, categorias, config],
   )
   const ritmoDia =
     ritmo.diasTranscurridos > 0

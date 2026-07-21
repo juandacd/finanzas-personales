@@ -277,37 +277,53 @@ function etiquetaRango(inicio: string, fin: string): string {
 }
 
 /**
- * Ciclo de quincena anclado al ingreso que el usuario marca como su pago de
- * quincena (movimientos con `es_quincena = TRUE`), en vez del calendario:
+ * Ciclo de quincena anclado al INGRESO de quincena, en vez del calendario. Un
+ * ingreso ancla el ciclo si su categoría es "Quincena" (por el id de la
+ * categoría cuyo nombre es "Quincena", sin distinguir mayúsculas) o, como opción
+ * avanzada, si tiene `es_quincena = TRUE`. Basta con elegir la categoría
+ * "Quincena" al registrar el ingreso; el flag es opcional.
  *
- * - `inicio`: la fecha del movimiento `es_quincena` más reciente que no supere
- *   `hoy` (si el ingreso se repartió, todas sus filas comparten fecha).
- * - `fin`: el día anterior a la SIGUIENTE fecha marcada; si no hay una posterior,
- *   `inicio` + `dias_ciclo` días (Config `dias_ciclo`, por defecto 15).
- * - Si no existe ningún movimiento `es_quincena`, cae en la quincena calendario
+ * - `inicio`: la fecha del ingreso de quincena más reciente que no supere `hoy`
+ *   (si el ingreso se repartió, todas sus filas comparten fecha).
+ * - `fin`: el día anterior a la SIGUIENTE fecha de quincena; si no hay una
+ *   posterior, `inicio` + `dias_ciclo` días (Config `dias_ciclo`, por defecto 15).
+ * - Si no existe ningún ingreso de quincena, cae en la quincena calendario
  *   (`cicloQuincenal`) para no romper el comportamiento previo.
  */
 export function cicloActual(
   movimientos: MovimientoRow[],
   hoy: Date,
+  categorias: CategoriaRow[] = [],
   config?: ConfigRow[],
 ): Ciclo {
   const hoyStr = aISO(soloFecha(hoy))
 
-  // Fechas distintas marcadas como inicio de ciclo, ordenadas ascendente.
+  // Id(s) de la categoría "Quincena" (por nombre, sin distinguir mayúsculas).
+  const idsQuincena = new Set(
+    categorias
+      .filter((c) => c.nombre.trim().toLowerCase() === 'quincena')
+      .map((c) => c.id),
+  )
+
+  // Un ingreso ancla el ciclo si su categoría es "Quincena" o si es_quincena=TRUE.
+  const esIngresoQuincena = (m: MovimientoRow): boolean =>
+    m.tipo === 'ingreso' &&
+    (m.es_quincena || (m.categoria_id !== '' && idsQuincena.has(m.categoria_id)))
+
+  // Fechas distintas de ingresos de quincena, ordenadas ascendente.
   const fechasQuincena = [
     ...new Set(
       movimientos
-        .filter((m) => m.es_quincena)
+        .filter(esIngresoQuincena)
         .map((m) => (m.fecha || '').slice(0, 10))
         .filter(Boolean),
     ),
   ].sort()
 
-  // inicio = la fecha marcada más reciente que no supere hoy.
+  // inicio = la fecha de quincena más reciente que no supere hoy.
   const inicio = [...fechasQuincena].reverse().find((f) => f <= hoyStr)
 
-  // Respaldo: sin ninguna marca aún, usa la quincena calendario.
+  // Respaldo: sin ningún ingreso de quincena, usa la quincena calendario.
   if (!inicio) return cicloQuincenal(hoy)
 
   const siguiente = fechasQuincena.find((f) => f > inicio)
@@ -506,11 +522,12 @@ export function reservasPorBolsillo(
   gastosFijos: GastoFijoRow[],
   hoy: Date,
   movimientos: MovimientoRow[],
+  categorias: CategoriaRow[] = [],
   config?: ConfigRow[],
 ): MapaSaldos {
   // Horizonte de reserva: fin del ciclo actual. (Ajusta esta línea para ampliar
   // o acortar cuánto por adelantado se reservan los pagos fijos.)
-  const horizonte = cicloActual(movimientos, hoy, config).fin
+  const horizonte = cicloActual(movimientos, hoy, categorias, config).fin
 
   const reservas: MapaSaldos = {}
   for (const gf of gastosFijos) {
@@ -886,9 +903,10 @@ export function ritmoGastoCiclo(
   movimientos: MovimientoRow[],
   bolsillos: BolsilloRow[],
   hoy: Date,
+  categorias: CategoriaRow[] = [],
   config?: ConfigRow[],
 ): RitmoGasto {
-  const ciclo = cicloActual(movimientos, hoy, config)
+  const ciclo = cicloActual(movimientos, hoy, categorias, config)
   const gasto = bolsillos.find((b) => b.tipo === 'gasto')
   const diasTotales = diffDias(ciclo.inicio, ciclo.fin) + 1
   if (!gasto) {

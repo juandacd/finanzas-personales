@@ -159,8 +159,9 @@ export function FinanzasProvider({ children }: { children: ReactNode }) {
   const total = useMemo(() => sumarSaldos(saldos.cuentas), [saldos])
 
   const reservas = useMemo(
-    () => reservasPorBolsillo(gastosFijos, new Date(), movimientos, config),
-    [gastosFijos, movimientos, config],
+    () =>
+      reservasPorBolsillo(gastosFijos, new Date(), movimientos, categorias, config),
+    [gastosFijos, movimientos, categorias, config],
   )
   const disponibleReal = useMemo(
     () => disponibleRealPorBolsillo(saldos.bolsillos, reservas),

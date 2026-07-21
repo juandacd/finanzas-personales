@@ -10,6 +10,7 @@ export default function Bolsillos() {
     total,
     cuadre,
     movimientos,
+    categorias,
     reservas,
     disponibleReal,
     config,
@@ -18,8 +19,8 @@ export default function Bolsillos() {
   } = useFinanzas()
   // Los bolsillos tipo "meta" se gestionan en la página Metas, no aquí.
   const activos = bolsillos.filter((b) => b.activo && b.tipo !== 'meta')
-  // Ciclo anclado al ingreso marcado como quincena (no al calendario).
-  const ciclo = cicloActual(movimientos, new Date(), config)
+  // Ciclo anclado al ingreso de quincena (por categoría "Quincena"), no al calendario.
+  const ciclo = cicloActual(movimientos, new Date(), categorias, config)
 
   return (
     <section>
