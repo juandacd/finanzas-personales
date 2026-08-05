@@ -277,11 +277,37 @@ function etiquetaRango(inicio: string, fin: string): string {
 }
 
 /**
- * Ciclo de quincena anclado al INGRESO de quincena, en vez del calendario. Un
- * ingreso ancla el ciclo si su categoría es "Quincena" (por el id de la
- * categoría cuyo nombre es "Quincena", sin distinguir mayúsculas) o, como opción
- * avanzada, si tiene `es_quincena = TRUE`. Basta con elegir la categoría
- * "Quincena" al registrar el ingreso; el flag es opcional.
+ * Fechas distintas (ascendente) de los ingresos ANCLA de quincena. Un ingreso
+ * ancla el ciclo si su categoría es "Quincena" (por el id de la categoría cuyo
+ * nombre es "Quincena", sin distinguir mayúsculas) o, como opción avanzada, si
+ * tiene `es_quincena = TRUE`. Basta con elegir la categoría "Quincena" al
+ * registrar el ingreso; el flag es opcional.
+ */
+function fechasAnclaQuincena(
+  movimientos: MovimientoRow[],
+  categorias: CategoriaRow[],
+): string[] {
+  const idsQuincena = new Set(
+    categorias
+      .filter((c) => c.nombre.trim().toLowerCase() === 'quincena')
+      .map((c) => c.id),
+  )
+  const esIngresoQuincena = (m: MovimientoRow): boolean =>
+    m.tipo === 'ingreso' &&
+    (m.es_quincena || (m.categoria_id !== '' && idsQuincena.has(m.categoria_id)))
+  return [
+    ...new Set(
+      movimientos
+        .filter(esIngresoQuincena)
+        .map((m) => (m.fecha || '').slice(0, 10))
+        .filter(Boolean),
+    ),
+  ].sort()
+}
+
+/**
+ * Ciclo de quincena anclado al INGRESO de quincena, en vez del calendario
+ * (ver `fechasAnclaQuincena`):
  *
  * - `inicio`: la fecha del ingreso de quincena más reciente que no supere `hoy`
  *   (si el ingreso se repartió, todas sus filas comparten fecha).
@@ -297,28 +323,7 @@ export function cicloActual(
   config?: ConfigRow[],
 ): Ciclo {
   const hoyStr = aISO(soloFecha(hoy))
-
-  // Id(s) de la categoría "Quincena" (por nombre, sin distinguir mayúsculas).
-  const idsQuincena = new Set(
-    categorias
-      .filter((c) => c.nombre.trim().toLowerCase() === 'quincena')
-      .map((c) => c.id),
-  )
-
-  // Un ingreso ancla el ciclo si su categoría es "Quincena" o si es_quincena=TRUE.
-  const esIngresoQuincena = (m: MovimientoRow): boolean =>
-    m.tipo === 'ingreso' &&
-    (m.es_quincena || (m.categoria_id !== '' && idsQuincena.has(m.categoria_id)))
-
-  // Fechas distintas de ingresos de quincena, ordenadas ascendente.
-  const fechasQuincena = [
-    ...new Set(
-      movimientos
-        .filter(esIngresoQuincena)
-        .map((m) => (m.fecha || '').slice(0, 10))
-        .filter(Boolean),
-    ),
-  ].sort()
+  const fechasQuincena = fechasAnclaQuincena(movimientos, categorias)
 
   // inicio = la fecha de quincena más reciente que no supere hoy.
   const inicio = [...fechasQuincena].reverse().find((f) => f <= hoyStr)
@@ -332,6 +337,38 @@ export function cicloActual(
     : aISO(sumarDias(desdeISO(inicio), leerDiasCiclo(config)))
 
   return { inicio, fin, etiqueta: etiquetaRango(inicio, fin) }
+}
+
+/**
+ * Deriva la lista de quincenas (ciclos) a partir de los ingresos ancla,
+ * ordenados por fecha: cada ancla inicia un ciclo que va desde su fecha hasta el
+ * día anterior al siguiente ancla. El último ciclo va hasta `hoy` (o, si el
+ * ancla es futura, hasta `inicio` + `dias_ciclo` días).
+ *
+ * Si no hay ningún ingreso de quincena, devuelve `[]` (el llamador decide el
+ * respaldo, p. ej. periodos por mes de calendario).
+ */
+export function derivarCiclos(
+  movimientos: MovimientoRow[],
+  hoy: Date,
+  categorias: CategoriaRow[] = [],
+  config?: ConfigRow[],
+): Ciclo[] {
+  const fechas = fechasAnclaQuincena(movimientos, categorias)
+  if (fechas.length === 0) return []
+
+  const hoyStr = aISO(soloFecha(hoy))
+  const diasCiclo = leerDiasCiclo(config)
+
+  return fechas.map((inicio, i) => {
+    const siguiente = fechas[i + 1]
+    const fin = siguiente
+      ? aISO(sumarDias(desdeISO(siguiente), -1))
+      : hoyStr >= inicio
+        ? hoyStr
+        : aISO(sumarDias(desdeISO(inicio), diasCiclo))
+    return { inicio, fin, etiqueta: etiquetaRango(inicio, fin) }
+  })
 }
 
 /** Resumen de un bolsillo dentro de un rango de fechas [inicio, fin]. */

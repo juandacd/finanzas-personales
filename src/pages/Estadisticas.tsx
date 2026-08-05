@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 import { useFinanzas } from '@/lib/FinanzasContext'
 import {
+  derivarCiclos,
   filtrarPorPeriodo,
   gastoPorBolsillo,
   gastoPorCategoria,
@@ -28,9 +29,21 @@ import {
 } from '@/lib/calculos'
 import { formatCOP } from '@/lib/format'
 
-type PeriodoTipo = 'mes' | 'mesPasado' | 'tres' | 'anio' | 'custom'
+type PeriodoTipo =
+  | 'quincenaActual'
+  | 'quincenaAnterior'
+  | 'mes'
+  | 'mesPasado'
+  | 'tres'
+  | 'anio'
+  | 'custom'
+
+/** Periodos anclados a mis quincenas (se resuelven con los ciclos derivados). */
+const TIPOS_QUINCENA: PeriodoTipo[] = ['quincenaActual', 'quincenaAnterior']
 
 const OPCIONES: { value: PeriodoTipo; label: string }[] = [
+  { value: 'quincenaActual', label: 'Quincena actual' },
+  { value: 'quincenaAnterior', label: 'Quincena anterior' },
   { value: 'mes', label: 'Este mes' },
   { value: 'mesPasado', label: 'Mes pasado' },
   { value: 'tres', label: 'Últimos 3 meses' },
@@ -85,7 +98,7 @@ export default function Estadisticas() {
   const { movimientos, categorias, bolsillos, cuentas, config, cargando } =
     useFinanzas()
 
-  const [tipo, setTipo] = useState<PeriodoTipo>('mes')
+  const [tipo, setTipo] = useState<PeriodoTipo>('quincenaActual')
   const [patrimonioModo, setPatrimonioModo] = useState<'periodo' | 'todo'>('todo')
   const [bolsilloSerieId, setBolsilloSerieId] = useState('')
   const hoy = new Date()
@@ -94,7 +107,28 @@ export default function Estadisticas() {
     hasta: ymd(hoy.getFullYear(), hoy.getMonth(), ultimoDia(hoy.getFullYear(), hoy.getMonth())),
   })
 
-  const { desde, hasta } = useMemo(() => rangoDe(tipo, custom), [tipo, custom])
+  // Quincenas (ciclos) derivadas de mis ingresos ancla, ordenadas por fecha.
+  const ciclos = useMemo(
+    () => derivarCiclos(movimientos, new Date(), categorias, config),
+    [movimientos, categorias, config],
+  )
+  const hoyStr = ymd(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+  const ciclosHastaHoy = ciclos.filter((c) => c.inicio <= hoyStr)
+  const quincenaActual = ciclosHastaHoy[ciclosHastaHoy.length - 1] ?? null
+  const quincenaAnterior = ciclosHastaHoy[ciclosHastaHoy.length - 2] ?? null
+
+  const esQuincena = TIPOS_QUINCENA.includes(tipo)
+
+  const { desde, hasta } = useMemo(() => {
+    if (tipo === 'quincenaActual' && quincenaActual) {
+      return { desde: quincenaActual.inicio, hasta: quincenaActual.fin }
+    }
+    if (tipo === 'quincenaAnterior' && quincenaAnterior) {
+      return { desde: quincenaAnterior.inicio, hasta: quincenaAnterior.fin }
+    }
+    // Respaldo (periodos por mes, o aún sin quincenas ancla): rango calendario.
+    return rangoDe(tipo, custom)
+  }, [tipo, custom, quincenaActual, quincenaAnterior])
 
   const delPeriodo = useMemo(
     () => filtrarPorPeriodo(movimientos, desde, hasta),
@@ -104,9 +138,9 @@ export default function Estadisticas() {
   const tasaAhorro =
     totales.ingresos > 0 ? (totales.neto / totales.ingresos) * 100 : null
 
-  // Granularidad según el periodo: por día si es un solo mes (o menos),
-  // por mes si el rango abarca varios meses.
-  const porDia = desde.slice(0, 7) === hasta.slice(0, 7)
+  // Granularidad según el periodo: por día para las quincenas (aunque crucen de
+  // un mes a otro) o si el rango cae en un solo mes; por mes si abarca varios.
+  const porDia = esQuincena || desde.slice(0, 7) === hasta.slice(0, 7)
   const serieIngEg = useMemo(
     () =>
       porDia
